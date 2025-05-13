@@ -1,0 +1,14 @@
+{
+  "name": "fyp-proxy-backend",
+  "version": "1.0.0",
+  "main": "token-proxy.js",
+  "scripts": {
+    "start": "node token-proxy.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
+    "ws": "^8.18.2"
+  }
+}
