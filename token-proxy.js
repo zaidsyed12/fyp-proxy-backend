@@ -9,7 +9,6 @@ const PORT = process.env.PORT || 10000;
 
 app.use(cors());
 
-// Health check endpoint for Render
 app.get('/', (req, res) => {
   res.send('Token proxy is running');
 });
@@ -19,9 +18,9 @@ const wss = new WebSocket.Server({ server });
 
 wss.on('connection', (clientSocket) => {
   console.log('🔌 New WebSocket client connected');
-  let userRole = 'unknown'; // Default role
+  let userRole = 'unknown';
 
-  // Create a new Deepgram socket for this specific client
+  // Create a Deepgram socket for this client only
   const deepgramSocket = new WebSocket(
     'wss://api.deepgram.com/v1/listen?encoding=linear16&sample_rate=16000&channels=1&punctuate=true',
     {
@@ -35,15 +34,16 @@ wss.on('connection', (clientSocket) => {
     console.log('🎧 Connected to Deepgram API');
   });
 
+  // Receive transcript and send it back to this client only
   deepgramSocket.on('message', (message) => {
     try {
       const parsed = JSON.parse(message);
       if (parsed.channel?.alternatives?.length) {
-        parsed.role = userRole; // Attach correct speaker label
+        parsed.role = userRole;
         clientSocket.send(JSON.stringify(parsed));
       }
-    } catch (e) {
-      console.error('❌ Failed to parse Deepgram message:', e);
+    } catch (err) {
+      console.error('❌ Deepgram parsing error:', err);
     }
   });
 
@@ -56,7 +56,7 @@ wss.on('connection', (clientSocket) => {
         return;
       }
     } catch {
-      // Not JSON, treat as audio chunk
+      // binary audio chunk
     }
 
     if (deepgramSocket.readyState === WebSocket.OPEN) {
@@ -65,14 +65,14 @@ wss.on('connection', (clientSocket) => {
   });
 
   clientSocket.on('close', () => {
-    console.log('❌ WebSocket client disconnected');
+    console.log('❌ Client disconnected');
     if (deepgramSocket.readyState === WebSocket.OPEN) {
       deepgramSocket.close();
     }
   });
 
-  clientSocket.on('error', (err) => console.error('Client WebSocket error:', err));
-  deepgramSocket.on('error', (err) => console.error('Deepgram WebSocket error:', err));
+  clientSocket.on('error', (err) => console.error('Client error:', err));
+  deepgramSocket.on('error', (err) => console.error('Deepgram error:', err));
 });
 
 server.listen(PORT, () => {
