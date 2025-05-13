@@ -2,12 +2,18 @@ const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const cors = require('cors');
+const path = require('path'); // ✅ Required by Render sometimes
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5001;
 
 app.use(cors());
+
+// ✅ Add a default GET route for health check (Render expects this sometimes)
+app.get('/', (req, res) => {
+  res.send('Token proxy is running');
+});
 
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
@@ -65,6 +71,7 @@ wss.on('connection', (clientSocket) => {
   clientSocket.on('error', (err) => console.error('Client error:', err));
 });
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Proxy WebSocket server running at ws://0.0.0.0:${PORT}`);
+// ✅ Do NOT bind to 0.0.0.0 on Render — just call `listen(PORT)`
+server.listen(PORT, () => {
+  console.log(`✅ Proxy WebSocket server running on port ${PORT}`);
 });
