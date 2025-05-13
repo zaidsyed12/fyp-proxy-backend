@@ -5,11 +5,10 @@ const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 10000; // ✅ Render injects PORT automatically
+const PORT = process.env.PORT || 10000;
 
 app.use(cors());
 
-// ✅ Health check route for Render
 app.get('/', (req, res) => {
   res.send('Token proxy is running');
 });
@@ -17,8 +16,10 @@ app.get('/', (req, res) => {
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
+const clients = new Map(); // Store client socket and role
+
 wss.on('connection', (clientSocket) => {
-  console.log('🔌 Client WebSocket connected');
+  console.log('🔌 New WebSocket client connected');
   let userRole = 'unknown';
 
   const deepgramSocket = new WebSocket(
@@ -34,15 +35,23 @@ wss.on('connection', (clientSocket) => {
     console.log('🎧 Connected to Deepgram API');
   });
 
+  // Send Deepgram response to all clients with attached role
   deepgramSocket.on('message', (message) => {
     try {
       const parsed = JSON.parse(message);
       if (parsed.channel?.alternatives?.length) {
         parsed.role = userRole;
+        const jsonWithRole = JSON.stringify(parsed);
+
+        // Broadcast to all connected clients
+        for (const [client] of clients) {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(jsonWithRole);
+          }
+        }
       }
-      clientSocket.send(JSON.stringify(parsed));
     } catch (e) {
-      console.error('❌ Failed to parse Deepgram message:', e);
+      console.error('❌ Deepgram parsing error:', e);
     }
   });
 
@@ -51,11 +60,12 @@ wss.on('connection', (clientSocket) => {
       const parsed = JSON.parse(message);
       if (parsed.role) {
         userRole = parsed.role;
+        clients.set(clientSocket, userRole);
         console.log(`🎭 Role set to: ${userRole}`);
         return;
       }
-    } catch (err) {
-      // Not JSON, assume it's audio
+    } catch {
+      // Not JSON => it's audio
     }
 
     if (deepgramSocket.readyState === WebSocket.OPEN) {
@@ -63,11 +73,16 @@ wss.on('connection', (clientSocket) => {
     }
   });
 
-  deepgramSocket.on('close', () => clientSocket.close());
-  clientSocket.on('close', () => deepgramSocket.close());
+  clientSocket.on('close', () => {
+    console.log('❌ WebSocket client disconnected');
+    clients.delete(clientSocket);
+    if (deepgramSocket.readyState === WebSocket.OPEN) {
+      deepgramSocket.close();
+    }
+  });
 
-  deepgramSocket.on('error', (err) => console.error('Deepgram error:', err));
   clientSocket.on('error', (err) => console.error('Client error:', err));
+  deepgramSocket.on('error', (err) => console.error('Deepgram error:', err));
 });
 
 server.listen(PORT, () => {
