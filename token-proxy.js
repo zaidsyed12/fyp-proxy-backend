@@ -2,15 +2,14 @@ const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const cors = require('cors');
-const path = require('path'); // ✅ Required by Render sometimes
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 10000; // ✅ Render injects PORT automatically
 
 app.use(cors());
 
-// ✅ Add a default GET route for health check (Render expects this sometimes)
+// ✅ Health check route for Render
 app.get('/', (req, res) => {
   res.send('Token proxy is running');
 });
@@ -20,7 +19,7 @@ const wss = new WebSocket.Server({ server });
 
 wss.on('connection', (clientSocket) => {
   console.log('🔌 Client WebSocket connected');
-  let userRole = 'unknown'; // 'doctor' or 'patient'
+  let userRole = 'unknown';
 
   const deepgramSocket = new WebSocket(
     'wss://api.deepgram.com/v1/listen?encoding=linear16&sample_rate=16000&channels=1&punctuate=true',
@@ -56,7 +55,7 @@ wss.on('connection', (clientSocket) => {
         return;
       }
     } catch (err) {
-      // Not JSON, assume it's binary audio
+      // Not JSON, assume it's audio
     }
 
     if (deepgramSocket.readyState === WebSocket.OPEN) {
@@ -71,7 +70,6 @@ wss.on('connection', (clientSocket) => {
   clientSocket.on('error', (err) => console.error('Client error:', err));
 });
 
-// ✅ Do NOT bind to 0.0.0.0 on Render — just call `listen(PORT)`
 server.listen(PORT, () => {
   console.log(`✅ Proxy WebSocket server running on port ${PORT}`);
 });
