@@ -16,11 +16,13 @@ app.get('/', (req, res) => {
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
+const clients = new Map(); // Map to track role per client
+
 wss.on('connection', (clientSocket) => {
   console.log('🔌 New WebSocket client connected');
   let userRole = 'unknown';
 
-  // Create a Deepgram socket for this client only
+  // Create Deepgram socket per client
   const deepgramSocket = new WebSocket(
     'wss://api.deepgram.com/v1/listen?encoding=linear16&sample_rate=16000&channels=1&punctuate=true',
     {
@@ -34,13 +36,19 @@ wss.on('connection', (clientSocket) => {
     console.log('🎧 Connected to Deepgram API');
   });
 
-  // Receive transcript and send it back to this client only
+  // On Deepgram message: broadcast to all clients with correct role
   deepgramSocket.on('message', (message) => {
     try {
       const parsed = JSON.parse(message);
       if (parsed.channel?.alternatives?.length) {
         parsed.role = userRole;
-        clientSocket.send(JSON.stringify(parsed));
+        const finalMessage = JSON.stringify(parsed);
+
+        for (const [client] of clients.entries()) {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(finalMessage);
+          }
+        }
       }
     } catch (err) {
       console.error('❌ Deepgram parsing error:', err);
@@ -52,11 +60,12 @@ wss.on('connection', (clientSocket) => {
       const parsed = JSON.parse(message);
       if (parsed.role) {
         userRole = parsed.role;
+        clients.set(clientSocket, userRole);
         console.log(`🎭 Role set to: ${userRole}`);
         return;
       }
     } catch {
-      // binary audio chunk
+      // binary audio (not JSON)
     }
 
     if (deepgramSocket.readyState === WebSocket.OPEN) {
@@ -66,6 +75,7 @@ wss.on('connection', (clientSocket) => {
 
   clientSocket.on('close', () => {
     console.log('❌ Client disconnected');
+    clients.delete(clientSocket);
     if (deepgramSocket.readyState === WebSocket.OPEN) {
       deepgramSocket.close();
     }
