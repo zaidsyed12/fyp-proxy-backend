@@ -16,13 +16,12 @@ app.get('/', (req, res) => {
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-const clients = new Map(); // Map to track role per client
+const clients = new Map();
 
 wss.on('connection', (clientSocket) => {
   console.log('🔌 New WebSocket client connected');
   let userRole = 'unknown';
 
-  // Create Deepgram socket per client
   const deepgramSocket = new WebSocket(
     'wss://api.deepgram.com/v1/listen?encoding=linear16&sample_rate=16000&channels=1&punctuate=true',
     {
@@ -36,7 +35,6 @@ wss.on('connection', (clientSocket) => {
     console.log('🎧 Connected to Deepgram API');
   });
 
-  // On Deepgram message: broadcast to all clients with correct role
   deepgramSocket.on('message', (message) => {
     try {
       const parsed = JSON.parse(message);
